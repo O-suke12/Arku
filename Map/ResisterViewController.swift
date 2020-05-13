@@ -149,7 +149,7 @@ class ResisterViewController: UIViewController, UITextFieldDelegate, UITextViewD
     }
 
     func underAlert(){
-        let alert: UIAlertController = UIAlertController(title: "", message: "Do you want to update the image", preferredStyle:  UIAlertController.Style.actionSheet)
+        let alert: UIAlertController = UIAlertController(title: "", message: "写真を追加しますか", preferredStyle:  UIAlertController.Style.actionSheet)
         
         
         let defaultAction: UIAlertAction = UIAlertAction(title: "追加する", style: UIAlertAction.Style.default, handler:{
@@ -195,9 +195,9 @@ class ResisterViewController: UIViewController, UITextFieldDelegate, UITextViewD
         //Storageの参照（"Item"という名前で保存）
         let storageref = Storage.storage().reference(forURL: "gs://acee-ba5ea.appspot.com").child(key!)
         //画像
-        let image = image_data
+        let image = image_data.resize(size: CGSize(width: 512,height: 512))
         //imageをNSDataに変換
-        let data = image.jpegData(compressionQuality: 1.0)! as NSData
+        let data = image!.jpegData(compressionQuality: 1.0)! as NSData
         //Storageに保存
         storageref.putData(data as Data, metadata: nil) { (data, error) in
             if error != nil {
@@ -223,3 +223,19 @@ class ResisterViewController: UIViewController, UITextFieldDelegate, UITextViewD
     }
 }
 
+extension UIImage {
+    func resize(size _size: CGSize) -> UIImage? {
+        let widthRatio = _size.width / size.width
+        let heightRatio = _size.height / size.height
+        let ratio = widthRatio < heightRatio ? widthRatio : heightRatio
+        
+        let resizedSize = CGSize(width: size.width * ratio, height: size.height * ratio)
+        
+        UIGraphicsBeginImageContextWithOptions(resizedSize, false, 0.0) // 変更
+        draw(in: CGRect(origin: .zero, size: resizedSize))
+        let resizedImage = UIGraphicsGetImageFromCurrentImageContext()
+        UIGraphicsEndImageContext()
+        
+        return resizedImage
+    }
+}

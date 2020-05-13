@@ -22,6 +22,8 @@ import EAIntroView
 
 class ViewController: UIViewController, CLLocationManagerDelegate, MKMapViewDelegate, EAIntroDelegate {
     
+    @IBOutlet var testLabel: UILabel!
+    
     @IBOutlet weak var mapView: MKMapView!
     @IBOutlet var outbutton:UIButton!
     @IBOutlet var exbutton:UIButton!
@@ -29,15 +31,22 @@ class ViewController: UIViewController, CLLocationManagerDelegate, MKMapViewDele
     var num1: Int!
     var num2: Int!
     var editAnn: MyPointAnnotation!
-    
+   
+//    var blockedUser = blocked.shared
+    //追加
+    var Ann: MyPointAnnotation!
     var user: User!
     var uid: String!
     var photoEx: String!
-    
+    var userDefaults = UserDefaults.standard
     var DBRef: DatabaseReference!
     var locationManager : CLLocationManager?  // これがないと位置情報が取れない
     @IBOutlet var longPressGesRec: UILongPressGestureRecognizer!
     var center: CLLocationCoordinate2D!
+    
+    var blockstore: [String] = []
+    var blockedUser = blocked.shared
+    var removedUser: [String] = []
     
     @IBOutlet var ActivityIndicator: UIActivityIndicatorView!
     @IBOutlet var upActivityIndicator: UIActivityIndicatorView!
@@ -46,107 +55,121 @@ class ViewController: UIViewController, CLLocationManagerDelegate, MKMapViewDele
     
     override func viewDidLoad() {
         super.viewDidLoad()
-        
-        upActivityIndicator.hidesWhenStopped = true
+//        loadMap()
+    }
+    
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        self.loadMap()
+    }
 
-        let reachability = Reachability.forInternetConnection()
-        if !(reachability!.isReachable()){
-            self.Alert(title:"エラー" , message: "接続出来ませんでした。")
-            return
+    
+    func loadMap() {
+         mapView.removeAnnotations(mapView.annotations)
+         upActivityIndicator.hidesWhenStopped = true
+
+
+         let reachability = Reachability.forInternetConnection()
+         if !(reachability!.isReachable()) {
+             self.Alert(title:"エラー" , message: "接続出来ませんでした。")
+             return
+         }
+         
+         outbutton.layer.borderWidth = 1
+         outbutton.layer.borderColor = UIColor(red: 19.0/255.0, green: 209.0/255.0, blue: 208.0/255.0, alpha: 1).cgColor
+         updatebutton.layer.borderWidth = 1
+         updatebutton.layer.borderColor = UIColor(red: 19.0/255.0, green: 209.0/255.0, blue: 208.0/255.0, alpha: 1).cgColor
+         uid = user!.uid
+         UIApplication.shared.beginIgnoringInteractionEvents()
+         
+         mapView.delegate = self
+        //向きを取る
+         mapView.setUserTrackingMode(MKUserTrackingMode.followWithHeading, animated: true)
+        
+//        blockstore = self.userDefaults.array(forKey: "blocked") as! [String]
+        blockstore = self.userDefaults.stringArray(forKey: "blocked")!
+        
+        if (self.blockstore.count != 0)
+        {
+            print("blockstore-----------")
+            print(blockstore)
+            testLabel.text = blockstore[0] as! String
         }
-        
-        outbutton.layer.borderWidth = 1
-        outbutton.layer.borderColor = UIColor(red: 19.0/255.0, green: 209.0/255.0, blue: 208.0/255.0, alpha: 1).cgColor
-        exbutton.layer.borderWidth = 1
-        exbutton.layer.borderColor = UIColor(red: 19.0/255.0, green: 209.0/255.0, blue: 208.0/255.0, alpha: 1).cgColor
-        updatebutton.layer.borderWidth = 1
-        updatebutton.layer.borderColor = UIColor(red: 19.0/255.0, green: 209.0/255.0, blue: 208.0/255.0, alpha: 1).cgColor
-        uid = user!.uid
-        UIApplication.shared.beginIgnoringInteractionEvents()
-        
-        mapView.delegate = self
-       //向きを取る
-        mapView.setUserTrackingMode(MKUserTrackingMode.followWithHeading, animated: true)
-        
+         
         DBRef = Database.database().reference()
-        let defaultPlace = DBRef.child("locationData")
         
-        defaultPlace.observe(DataEventType.value, with: { (snapshot) in
-            let postDict = snapshot.value as? [String : AnyObject] ?? [:]
-            for locationInfo in postDict.values{
-                print(locationInfo)
-                let longitude = locationInfo["longitude"]!! as! CLLocationDegrees
-                let latitude = locationInfo["latitude"]!! as! CLLocationDegrees
-                let caption = locationInfo["caption"]!! as! String
-                let title = locationInfo["title"]!! as! String
-                let id = locationInfo["id"]!! as! String
-                let uid = locationInfo["uid"]!! as! String
-                let photoEx = locationInfo["photoEx"] as! String
-                
-                self.addAn(latitude: latitude, longitude: longitude, title: title, subtitle: caption, mapView: self.mapView, id: id, uid: uid, photoEx: photoEx)
-            }
-        })
-        
-        UIApplication.shared.endIgnoringInteractionEvents()
-        
-        //locatioManagerを使えるようにするためのもの
-        locationManager = CLLocationManager()
-        //自分で管理するよ
-        locationManager!.delegate = self
-        //位置情報を取るための許可を取るよん
-        locationManager!.requestWhenInUseAuthorization()
-        locationManager?.startUpdatingLocation()
+        var defaultPlace = DBRef.child("locationData")
+         
+         defaultPlace.observe(DataEventType.value, with: { (snapshot) in
+             let postDict = snapshot.value as? [String : AnyObject] ?? [:]
+             for locationInfo in postDict.values{
+                 print(locationInfo)
+                 let longitude = locationInfo["longitude"]!! as! CLLocationDegrees
+                 let latitude = locationInfo["latitude"]!! as! CLLocationDegrees
+                 let caption = locationInfo["caption"]!! as! String
+                 let title = locationInfo["title"]!! as! String
+                 let id = locationInfo["id"]!! as! String
+                 let uid = locationInfo["uid"]!! as! String
+                 let photoEx = locationInfo["photoEx"] as! String
 
+                 //ifでもし、blockListと一致しない場合のみ呼ぶ
+                
+                print(self.removedUser)
+                 if(!self.removedUser.contains(uid)){
+                     self.addAn(latitude: latitude, longitude: longitude, title: title, subtitle: caption, mapView: self.mapView, id: id, uid: uid, photoEx: photoEx)
+                 }
+             }
+         })
         
-       // if !CLLocationManager.locationServicesEnabled() {
-         //   return
-       // }
+        defaultPlace = DBRef.child("block").child(uid)
         
-        guard let location = locationManager?.location else {
-            return
-        }
-        
-        if (CLLocationManager.locationServicesEnabled()){
-            switch CLLocationManager.authorizationStatus(){
-            case .notDetermined, .restricted, .denied:
-                break
-            case .authorizedWhenInUse,.authorizedAlways:
-                
-                print(location.coordinate.latitude)
-                print(location.coordinate.longitude)
-                //緯度と経度を設定
-                let latitude = locationManager!.location!.coordinate.latitude
-                let longitude = locationManager!.location!.coordinate.longitude
-                
-                //先ほど設定した緯度と経度に元ずいてじ地図の中心をセットしている
-                center = CLLocationCoordinate2DMake(latitude, longitude)
-                
-                // MapViewに中心点を設定.
-                self.mapView.setCenter(center, animated: true)
-                self.mapView.userTrackingMode  = MKUserTrackingMode.followWithHeading
-                self.mapView.userLocation.title = nil
-                mapView.deselectAnnotation(self.mapView.userLocation, animated: true)
-                
-                // ピンを生成.
-//                let myPin: MKPointAnnotation = MKPointAnnotation()
-//
-//                // 座標を設定.
-//                myPin.coordinate = center
-//
-//                // タイトルを設定.
-//                myPin.title = "タイトル"
-//
-//                // サブタイトルを設定.
-//                myPin.subtitle = "サブタイトル"
-//
-                // MapViewにピンを追加.
-                //mapView.addAnnotation(myPin)
-                
-            @unknown default:
-                break
+        defaultPlace.observeSingleEvent(of: DataEventType.value, with: { (snapshot) in
+            let blockedUsers = snapshot.value as? [String : AnyObject] ?? [:]
+            var users = blockedUsers.keys
+            for user in users{
+                self.removedUser.append(user as! String)
             }
-        }
-        self.mapView.showsUserLocation = true
+            print(self.removedUser)
+        })
+         
+         UIApplication.shared.endIgnoringInteractionEvents()
+         
+         //locatioManagerを使えるようにするためのもの
+         locationManager = CLLocationManager()
+         //自分で管理するよ
+         locationManager!.delegate = self
+         //位置情報を取るための許可を取るよん
+         locationManager!.requestWhenInUseAuthorization()
+         locationManager?.startUpdatingLocation()
+         guard let location = locationManager?.location else {
+             return
+         }
+         
+         if (CLLocationManager.locationServicesEnabled()){
+             switch CLLocationManager.authorizationStatus(){
+             case .notDetermined, .restricted, .denied:
+                 break
+             case .authorizedWhenInUse,.authorizedAlways:
+                 
+                 print(location.coordinate.latitude)
+                 print(location.coordinate.longitude)
+                 //緯度と経度を設定
+                 let latitude = locationManager!.location!.coordinate.latitude
+                 let longitude = locationManager!.location!.coordinate.longitude
+                 
+                 //先ほど設定した緯度と経度に元ずいてじ地図の中心をセットしている
+                 center = CLLocationCoordinate2DMake(latitude, longitude)
+                 
+                 // MapViewに中心点を設定.
+                 self.mapView.setCenter(center, animated: true)
+                 self.mapView.userTrackingMode  = MKUserTrackingMode.followWithHeading
+                 self.mapView.userLocation.title = nil
+                 mapView.deselectAnnotation(self.mapView.userLocation, animated: true)
+             @unknown default:
+                 break
+             }
+         }
+         self.mapView.showsUserLocation = true
     }
     
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
@@ -157,36 +180,6 @@ class ViewController: UIViewController, CLLocationManagerDelegate, MKMapViewDele
     
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         print("Unable to access your current location")
-    }
-    
-   
-
-//    func mapView(mapView: MKMapView!, viewForAnnotation annotation: MKAnnotation!) -> MKAnnotationView! {
-//
-//        let myPinIdentifier = "PinAnnotationIdentifier"
-//
-//        // ピンを生成.
-//        var myPinView: MKPinAnnotationView!
-//
-//        // MKPinAnnotationViewのインスタンスが生成されていなければ作る.
-//        if myPinView == nil {
-//            myPinView = MKPinAnnotationView(annotation: annotation, reuseIdentifier: myPinIdentifier)
-//
-//            // アニメーションをつける.
-//            myPinView.animatesDrop = true
-//
-//            // コールアウトを表示する.
-//            myPinView.canShowCallout = false
-//            return myPinView
-//        }
-//
-//        // annotationを設定.
-//        myPinView.annotation = annotation
-//        return myPinView
-//    }
-    
-    override func didReceiveMemoryWarning() {
-        super.didReceiveMemoryWarning()
     }
     
     func locationManager(_ manager: CLLocationManager, didChangeAuthorization status: CLAuthorizationStatus) {
@@ -274,6 +267,7 @@ class ViewController: UIViewController, CLLocationManagerDelegate, MKMapViewDele
             return
         }
         print(editAnn.id!)
+        //現在地の向き
         if (editAnn.uid == self.uid){
             let editVC = storyboard!.instantiateViewController(withIdentifier: "toEdit") as! EditViewController
             editVC.user = self.user
@@ -290,6 +284,7 @@ class ViewController: UIViewController, CLLocationManagerDelegate, MKMapViewDele
             VC.lognitude = editAnn.coordinate.longitude
             VC.latitude = editAnn.coordinate.latitude
             VC.mapView = self.mapView
+            VC.modalPresentationStyle = .fullScreen
             self.present(VC,animated: true, completion: nil)
         }
     }
@@ -341,57 +336,10 @@ class ViewController: UIViewController, CLLocationManagerDelegate, MKMapViewDele
         present(alert, animated: true, completion: nil)
     }
     
-    @IBAction func ex() {
-        explain()
-    }
+    //@IBAction func ex() {
+    //    explain()
+   // }
     
-    func explain(){
-        let page1 = EAIntroPage()
-        page1.bgImage = UIImage(named: "IMG_3354.PNG")
-        page1.title = "画面を長押ししてピンをたてよう"
-        page1.titlePositionY = 135
-        page1.titleColor = UIColor.black
-        page1.bgColor = UIColor.white
-        page1.titleFont = UIFont(name: "Helvetica-Bold", size: 32)
-       
-        let page2 = EAIntroPage()
-        page2.title = "文と写真をつけて投稿 しよう"
-        page2.titlePositionY = 135
-        page2.titleColor = UIColor.black
-        page2.bgImage = UIImage(named: "IMG_3353.PNG")
-        page2.bgColor = UIColor.white
-        page2.titleFont = UIFont(name: "Helvetica-Bold", size: 32)
-        
-        let page3 = EAIntroPage()
-        page3.title = "もう一度ピンをタップすれば編集出来ます"
-        page3.bgImage = UIImage(named: "IMG_3355.PNG")
-        page3.bgColor = UIColor.white
-        page3.titleFont = UIFont(name: "Helvetica-Bold", size: 32)
-        page3.titleColor = UIColor.black
-        page3.titlePositionY = 135
-        //page3.descPositionY = self.view.bounds.size.height/2
-        
-        let page4 = EAIntroPage()
-        page4.title = "他の人のピンをタップ　　して『いいね』やコメントをしよう"
-        page4.bgImage = UIImage(named: "IMG_3356.PNG")
-        page4.titlePositionY = 135
-        page4.bgColor = UIColor.white
-        page4.titleFont = UIFont(name: "Helvetica-Bold", size: 32)
-        page4.titleColor = UIColor.black
-        
-        let page5 = EAIntroPage()
-        page5.title = "現在地をタップすれば　進行方向が分かります"
-        page5.bgImage = UIImage(named: "IMG_0281.PNG")
-        page5.titlePositionY = 135
-        page5.bgColor = UIColor.white
-        page5.titleFont = UIFont(name: "Helvetica-Bold", size: 32)
-        page5.titleColor = UIColor.black
-        
-        let introView = EAIntroView(frame: self.view.bounds, andPages: [page1, page2, page3,page4,page5])
-        //introView?.skipButton.setTitle("スキップ", for: UIControl.State.normal) //スキップボタン欲しいならここで実装！
-        introView?.delegate = self
-        introView?.show(in: self.view, animateDuration: 1.0)
-}
 
     @IBAction func logout(){
         self.logoutAlert(title: "ログアウト", message: "ログアウトしますか？")
@@ -416,7 +364,7 @@ class ViewController: UIViewController, CLLocationManagerDelegate, MKMapViewDele
     @IBAction func update() {
         updatebutton.isHidden = true
         upActivityIndicator.startAnimating()
-        self.viewDidLoad()
+        loadMap()
         upActivityIndicator.stopAnimating()
         updatebutton.isHidden = false
     }
